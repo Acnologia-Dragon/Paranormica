@@ -61,15 +61,14 @@ let isFlying = false;
 let canJump = false;
 let lastSpacePressTime = 0;
 
-// Parâmetros de física ajustados para movimento fluido
 const velocity = new THREE.Vector3();
 let prevTime = performance.now();
 
 const PLAYER_HEIGHT = 1.62;
 const PLAYER_RADIUS = 0.28;
-const WALK_SPEED = 24.0;
-const FLY_SPEED = 32.0;
-const FRICTION = 12.0;
+const WALK_SPEED = 22.0;
+const FLY_SPEED = 30.0;
+const FRICTION = 14.0;
 const GRAVITY = 28.0;
 const JUMP_FORCE = 9.5;
 
@@ -518,7 +517,7 @@ function animate() {
         velocity.x -= velocity.x * FRICTION * delta;
         velocity.z -= velocity.z * FRICTION * delta;
 
-        // Vetores de direção da câmera
+        // Captura a direção exata para onde a câmara está a olhar no plano horizontal (XZ)
         const forward = new THREE.Vector3();
         camera.getWorldDirection(forward);
         if (!isFlying) forward.y = 0;
