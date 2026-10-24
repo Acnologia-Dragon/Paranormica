@@ -1,4 +1,4 @@
-// Definition of available block types in the game
+// Definição dos tipos de blocos disponíveis
 const BLOCK_TYPES = {
     GRASS: { id: 1, name: 'Grama', topColor: '#557a2b', sideColor: '#5b4028', bottomColor: '#4a331e' },
     DIRT: { id: 2, name: 'Terra', color: '#4a331e' },
@@ -14,8 +14,8 @@ const BLOCK_TYPES = {
     SNOW: { id: 12, name: 'Neve', color: '#ffffff' }
 };
 
-// Generates procedural canvas textures for blocks
-function createBlockTexture(colorHex, pattern = 'noise') {
+// Gerador de texturas procedural para blocos
+function createBlockTexture(colorHex) {
     const canvas = document.createElement('canvas');
     canvas.width = 64;
     canvas.height = 64;
@@ -24,11 +24,9 @@ function createBlockTexture(colorHex, pattern = 'noise') {
     ctx.fillStyle = colorHex;
     ctx.fillRect(0, 0, 64, 64);
 
-    if (pattern === 'noise') {
-        for (let i = 0; i < 400; i++) {
-            ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.12)';
-            ctx.fillRect(Math.floor(Math.random()*64), Math.floor(Math.random()*64), 2, 2);
-        }
+    for (let i = 0; i < 400; i++) {
+        ctx.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.12)';
+        ctx.fillRect(Math.floor(Math.random() * 64), Math.floor(Math.random() * 64), 2, 2);
     }
     const texture = new THREE.CanvasTexture(canvas);
     texture.magFilter = THREE.NearestFilter;
@@ -36,7 +34,7 @@ function createBlockTexture(colorHex, pattern = 'noise') {
     return texture;
 }
 
-// Global Variables
+// Variáveis Globais
 let scene, camera, renderer, controls;
 let blocks = new Map();
 let materialsMap = {};
@@ -44,7 +42,6 @@ let selectedSlotIndex = 0;
 let isInventoryOpen = false;
 let selectedCatalogBlock = null;
 
-// Hotbar setup with 9 initial default blocks
 let hotbarSlots = [
     BLOCK_TYPES.GRASS,
     BLOCK_TYPES.DIRT,
@@ -57,14 +54,13 @@ let hotbarSlots = [
     BLOCK_TYPES.GLASS
 ];
 
-// Physics / Movement variables
+// Física e Controlo
 let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
 let canJump = false;
 const velocity = new THREE.Vector3();
 const direction = new THREE.Vector3();
 let prevTime = performance.now();
 
-// Player parameters
 const PLAYER_HEIGHT = 1.6;
 const PLAYER_RADIUS = 0.3;
 
@@ -72,7 +68,7 @@ init();
 animate();
 
 function init() {
-    // 1. Scene & Camera Setup
+    // 1. Cena e Câmara
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87ceeb);
     scene.fog = new THREE.FogExp2(0x87ceeb, 0.015);
@@ -82,21 +78,17 @@ function init() {
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.shadowMap.enabled = true;
     document.body.appendChild(renderer.domElement);
 
-    // 2. Lighting
+    // 2. Luzes
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
 
     const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
     dirLight.position.set(50, 100, 50);
-    dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 2048;
-    dirLight.shadow.mapSize.height = 2048;
     scene.add(dirLight);
 
-    // 3. Materials Generator
+    // 3. Materiais
     Object.values(BLOCK_TYPES).forEach(b => {
         if (b.topColor) {
             const topTex = createBlockTexture(b.topColor);
@@ -125,12 +117,14 @@ function init() {
         }
     });
 
-    // 4. Controls
+    // 4. Controlos de Rato (PointerLock corrigido para evitar conflitos com inventário)
     controls = new THREE.PointerLockControls(camera, document.body);
 
     const instructions = document.getElementById('instructions');
     instructions.addEventListener('click', () => {
-        if (!isInventoryOpen) controls.lock();
+        if (!isInventoryOpen) {
+            controls.lock();
+        }
     });
 
     controls.addEventListener('lock', () => {
@@ -138,6 +132,7 @@ function init() {
     });
 
     controls.addEventListener('unlock', () => {
+        // Só mostra instruções se o inventário não estiver aberto
         if (!isInventoryOpen) {
             instructions.style.display = 'flex';
         }
@@ -145,7 +140,7 @@ function init() {
 
     scene.add(controls.getObject());
 
-    // 5. Event Listeners
+    // 5. Eventos de Teclado e Rato
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('keyup', onKeyUp);
     document.addEventListener('mousedown', onMouseDown);
@@ -165,22 +160,20 @@ function init() {
         e.stopPropagation();
         if (confirm('Queres apagar todas as tuas construções e restaurar o mundo?')) {
             localStorage.removeItem('minecraft_saved_world');
+            localStorage.removeItem('minecraft_saved_hotbar');
             location.reload();
         }
     });
 
-    // 6. UI Setup
     loadSavedHotbar();
     buildUIHotbar();
     buildCatalogUI();
-
-    // 7. World Generation
     loadOrGenerateWorld();
 }
 
-// World Generation and Storage
+// Gestão de Blocos e Chaves do Mundo
 function getBlockKey(x, y, z) {
-    return `${x},${y},${z}`;
+    return `${Math.round(x)},${Math.round(y)},${Math.round(z)}`;
 }
 
 function addBlock(x, y, z, type, save = true) {
@@ -190,9 +183,7 @@ function addBlock(x, y, z, type, save = true) {
     const geometry = new THREE.BoxGeometry(1, 1, 1);
     const mesh = new THREE.Mesh(geometry, materialsMap[type.id]);
     mesh.position.set(x + 0.5, y + 0.5, z + 0.5);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    mesh.userData = { x, y, z, typeId: type.id };
+    mesh.userData = { x: Math.round(x), y: Math.round(y), z: Math.round(z), typeId: type.id };
 
     scene.add(mesh);
     blocks.set(key, mesh);
@@ -212,62 +203,75 @@ function removeBlock(x, y, z) {
 }
 
 function saveWorld() {
-    const worldData = [];
-    blocks.forEach((mesh) => {
-        const { x, y, z, typeId } = mesh.userData;
-        worldData.push({ x, y, z, typeId });
-    });
-    localStorage.setItem('minecraft_saved_world', JSON.stringify(worldData));
+    try {
+        const worldData = [];
+        blocks.forEach((mesh) => {
+            const { x, y, z, typeId } = mesh.userData;
+            worldData.push({ x, y, z, typeId });
+        });
+        localStorage.setItem('minecraft_saved_world', JSON.stringify(worldData));
+    } catch (e) {
+        console.warn('Erro ao guardar o mundo no LocalStorage:', e);
+    }
 }
 
 function loadOrGenerateWorld() {
     const saved = localStorage.getItem('minecraft_saved_world');
     if (saved) {
-        const data = JSON.parse(saved);
-        data.forEach(b => {
-            const type = Object.values(BLOCK_TYPES).find(t => t.id === b.typeId) || BLOCK_TYPES.GRASS;
-            addBlock(b.x, b.y, b.z, type, false);
-        });
-        controls.getObject().position.set(0, 10, 0);
+        try {
+            const data = JSON.parse(saved);
+            data.forEach(b => {
+                const type = Object.values(BLOCK_TYPES).find(t => t.id === b.typeId) || BLOCK_TYPES.GRASS;
+                addBlock(b.x, b.y, b.z, type, false);
+            });
+            controls.getObject().position.set(0, 10, 0);
+        } catch (e) {
+            console.error('Erro ao carregar dados salvos. A gerar novo mundo...');
+            generateDefaultWorld();
+        }
     } else {
-        const size = 16;
-        for (let x = -size; x < size; x++) {
-            for (let z = -size; z < size; z++) {
-                addBlock(x, 0, z, BLOCK_TYPES.STONE, false);
-                addBlock(x, 1, z, BLOCK_TYPES.DIRT, false);
-                addBlock(x, 2, z, BLOCK_TYPES.GRASS, false);
+        generateDefaultWorld();
+    }
+}
 
-                // Trees
-                if (x % 7 === 0 && z % 7 === 0 && Math.abs(x) > 2 && Math.abs(z) > 2) {
-                    for (let h = 3; h <= 5; h++) {
-                        addBlock(x, h, z, BLOCK_TYPES.WOOD, false);
-                    }
-                    for (let lx = -1; lx <= 1; lx++) {
-                        for (let lz = -1; lz <= 1; lz++) {
-                            for (let ly = 5; ly <= 6; ly++) {
-                                if (lx === 0 && lz === 0 && ly === 5) continue;
-                                addBlock(x + lx, ly, z + lz, BLOCK_TYPES.LEAVES, false);
-                            }
+function generateDefaultWorld() {
+    const size = 12;
+    for (let x = -size; x < size; x++) {
+        for (let z = -size; z < size; z++) {
+            addBlock(x, 0, z, BLOCK_TYPES.STONE, false);
+            addBlock(x, 1, z, BLOCK_TYPES.DIRT, false);
+            addBlock(x, 2, z, BLOCK_TYPES.GRASS, false);
+
+            if (x % 6 === 0 && z % 6 === 0 && Math.abs(x) > 2 && Math.abs(z) > 2) {
+                for (let h = 3; h <= 5; h++) {
+                    addBlock(x, h, z, BLOCK_TYPES.WOOD, false);
+                }
+                for (let lx = -1; lx <= 1; lx++) {
+                    for (let lz = -1; lz <= 1; lz++) {
+                        for (let ly = 5; ly <= 6; ly++) {
+                            if (lx === 0 && lz === 0 && ly === 5) continue;
+                            addBlock(x + lx, ly, z + lz, BLOCK_TYPES.LEAVES, false);
                         }
                     }
                 }
             }
         }
-        controls.getObject().position.set(0, 5, 0);
     }
+    controls.getObject().position.set(0, 5, 0);
 }
 
-// UI Hotbar and Inventory Setup
+// Interface Hotbar e Inventário
 function buildUIHotbar() {
     const hotbarEl = document.getElementById('hotbar');
     const targetEl = document.getElementById('inventory-hotbar-target');
+    if (!hotbarEl || !targetEl) return;
+
     hotbarEl.innerHTML = '';
     targetEl.innerHTML = '';
 
     for (let i = 0; i < 9; i++) {
         const block = hotbarSlots[i];
         
-        // Game Hotbar
         const slot = document.createElement('div');
         slot.className = `slot ${i === selectedSlotIndex ? 'active' : ''}`;
         slot.innerHTML = `
@@ -275,10 +279,9 @@ function buildUIHotbar() {
             <div class="slot-icon" style="background-color: ${block ? (block.color || block.sideColor) : 'transparent'}"></div>
             <span class="slot-name">${block ? block.name : ''}</span>
         `;
-        slot.onclick = () => { selectSlot(i); };
+        slot.onclick = () => selectSlot(i);
         hotbarEl.appendChild(slot);
 
-        // Modal Target Hotbar
         const targetSlot = document.createElement('div');
         targetSlot.className = 'slot';
         targetSlot.innerHTML = `
@@ -286,13 +289,14 @@ function buildUIHotbar() {
             <div class="slot-icon" style="background-color: ${block ? (block.color || block.sideColor) : 'transparent'}"></div>
             <span class="slot-name">${block ? block.name : ''}</span>
         `;
-        targetSlot.onclick = () => { equipSelectedToSlot(i); };
+        targetSlot.onclick = () => equipSelectedToSlot(i);
         targetEl.appendChild(targetSlot);
     }
 }
 
 function buildCatalogUI() {
     const catalogEl = document.getElementById('block-catalog');
+    if (!catalogEl) return;
     catalogEl.innerHTML = '';
 
     Object.values(BLOCK_TYPES).forEach(b => {
@@ -313,7 +317,7 @@ function buildCatalogUI() {
 
 function equipSelectedToSlot(slotIndex) {
     if (!selectedCatalogBlock) {
-        alert('Clica num bloco do catálogo acima primeiro!');
+        alert('Clica num bloco do catálogo primeiro!');
         return;
     }
     hotbarSlots[slotIndex] = selectedCatalogBlock;
@@ -327,15 +331,23 @@ function selectSlot(index) {
 }
 
 function saveHotbar() {
-    const data = hotbarSlots.map(b => b.id);
-    localStorage.setItem('minecraft_saved_hotbar', JSON.stringify(data));
+    try {
+        const data = hotbarSlots.map(b => b.id);
+        localStorage.setItem('minecraft_saved_hotbar', JSON.stringify(data));
+    } catch (e) {
+        console.warn('Erro ao guardar hotbar:', e);
+    }
 }
 
 function loadSavedHotbar() {
     const saved = localStorage.getItem('minecraft_saved_hotbar');
     if (saved) {
-        const ids = JSON.parse(saved);
-        hotbarSlots = ids.map(id => Object.values(BLOCK_TYPES).find(b => b.id === id) || BLOCK_TYPES.GRASS);
+        try {
+            const ids = JSON.parse(saved);
+            hotbarSlots = ids.map(id => Object.values(BLOCK_TYPES).find(b => b.id === id) || BLOCK_TYPES.GRASS);
+        } catch (e) {
+            console.error('Erro ao carregar hotbar salva.');
+        }
     }
 }
 
@@ -352,10 +364,12 @@ function toggleInventory(forceState) {
     }
 }
 
-// User Interaction Handling
+// Eventos de Teclado e Rato corrigidos
 function onKeyDown(event) {
     if (isInventoryOpen) {
-        if (event.code === 'KeyE' || event.code === 'Escape') toggleInventory(false);
+        if (event.code === 'KeyE' || event.code === 'Escape') {
+            toggleInventory(false);
+        }
         return;
     }
 
@@ -364,8 +378,15 @@ function onKeyDown(event) {
         case 'KeyS': case 'ArrowDown': moveBackward = true; break;
         case 'KeyA': case 'ArrowLeft': moveLeft = true; break;
         case 'KeyD': case 'ArrowRight': moveRight = true; break;
-        case 'Space': if (canJump) velocity.y += 12; canJump = false; break;
-        case 'KeyE': toggleInventory(true); break;
+        case 'Space': 
+            if (canJump) {
+                velocity.y += 12;
+                canJump = false;
+            } 
+            break;
+        case 'KeyE': 
+            toggleInventory(true); 
+            break;
         default:
             if (event.code.startsWith('Digit')) {
                 const num = parseInt(event.code.replace('Digit', ''));
@@ -385,7 +406,7 @@ function onKeyUp(event) {
 }
 
 function onWheel(event) {
-    if (isInventoryOpen) return;
+    if (isInventoryOpen || !controls.isLocked) return;
     if (event.deltaY > 0) {
         selectedSlotIndex = (selectedSlotIndex + 1) % 9;
     } else {
@@ -404,22 +425,19 @@ function onMouseDown(event) {
 
     if (intersects.length > 0) {
         const hit = intersects[0];
-        if (hit.distance > 8) return; // Distância máxima de alcance
+        if (hit.distance > 8) return;
 
         const mesh = hit.object;
         const { x, y, z } = mesh.userData;
 
         if (event.button === 0) {
-            // Clique Esquerdo: Partir
             removeBlock(x, y, z);
         } else if (event.button === 2) {
-            // Clique Direito: Colocar
             const normal = hit.face.normal;
             const nx = x + Math.round(normal.x);
             const ny = y + Math.round(normal.y);
             const nz = z + Math.round(normal.z);
 
-            // Evita criar bloco dentro do jogador
             const playerPos = controls.getObject().position;
             const minX = Math.floor(playerPos.x - PLAYER_RADIUS);
             const maxX = Math.floor(playerPos.x + PLAYER_RADIUS);
@@ -446,7 +464,7 @@ function onWindowResize() {
     renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-// Collisions and Physics
+// Colisões corrigidas para evitar ficar preso nas paredes
 function checkCollision(position) {
     const minX = Math.floor(position.x - PLAYER_RADIUS);
     const maxX = Math.floor(position.x + PLAYER_RADIUS);
@@ -467,7 +485,7 @@ function checkCollision(position) {
     return false;
 }
 
-// Render Loop
+// Loop de Animação e Física
 function animate() {
     requestAnimationFrame(animate);
 
@@ -476,10 +494,8 @@ function animate() {
     prevTime = time;
 
     if (controls.isLocked) {
-        // Gravidade
         velocity.y -= 30.0 * delta;
 
-        // Atrito / Desaceleração
         velocity.x -= velocity.x * 10.0 * delta;
         velocity.z -= velocity.z * 10.0 * delta;
 
@@ -493,21 +509,18 @@ function animate() {
 
         const playerObj = controls.getObject();
 
-        // Movimento Eixo X
         playerObj.position.x -= velocity.x * delta;
         if (checkCollision(playerObj.position)) {
             playerObj.position.x += velocity.x * delta;
             velocity.x = 0;
         }
 
-        // Movimento Eixo Z
         playerObj.position.z -= velocity.z * delta;
         if (checkCollision(playerObj.position)) {
             playerObj.position.z += velocity.z * delta;
             velocity.z = 0;
         }
 
-        // Movimento Eixo Y (Vertical / Queda / Salto)
         playerObj.position.y += velocity.y * delta;
         if (checkCollision(playerObj.position)) {
             if (velocity.y < 0) {
@@ -517,7 +530,6 @@ function animate() {
             velocity.y = 0;
         }
 
-        // Limite inferior do mundo
         if (playerObj.position.y < -30) {
             velocity.y = 0;
             playerObj.position.set(0, 15, 0);
