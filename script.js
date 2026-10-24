@@ -54,9 +54,13 @@ let hotbarSlots = [
     BLOCK_TYPES.GLASS
 ];
 
-// Física e Controlo
+// Física, Movimento e Voo
 let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+let moveUp = false, moveDown = false;
+let isFlying = false;
 let canJump = false;
+let lastSpacePressTime = 0; // Para detectar o clique duplo do Espaço
+
 const velocity = new THREE.Vector3();
 const direction = new THREE.Vector3();
 let prevTime = performance.now();
@@ -71,7 +75,7 @@ function init() {
     // 1. Cena e Câmara
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87ceeb);
-    scene.fog = new THREE.FogExp2(0x87ceeb, 0.015);
+    scene.fog = new THREE.FogExp2(0x87ceeb, 0.012);
 
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 
@@ -81,14 +85,14 @@ function init() {
     document.body.appendChild(renderer.domElement);
 
     // 2. Luzes
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
     scene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.75);
     dirLight.position.set(50, 100, 50);
     scene.add(dirLight);
 
-    // 3. Materiais
+    // 3. Materiais dos Blocos
     Object.values(BLOCK_TYPES).forEach(b => {
         if (b.topColor) {
             const topTex = createBlockTexture(b.topColor);
@@ -117,7 +121,7 @@ function init() {
         }
     });
 
-    // 4. Controlos de Rato (PointerLock corrigido para evitar conflitos com inventário)
+    // 4. Controlos de Rato
     controls = new THREE.PointerLockControls(camera, document.body);
 
     const instructions = document.getElementById('instructions');
@@ -132,7 +136,6 @@ function init() {
     });
 
     controls.addEventListener('unlock', () => {
-        // Só mostra instruções se o inventário não estiver aberto
         if (!isInventoryOpen) {
             instructions.style.display = 'flex';
         }
@@ -140,12 +143,15 @@ function init() {
 
     scene.add(controls.getObject());
 
-    // 5. Eventos de Teclado e Rato
+    // 5. Eventos de Entrada
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('keyup', onKeyUp);
     document.addEventListener('mousedown', onMouseDown);
     document.addEventListener('wheel', onWheel, { passive: true });
     window.addEventListener('resize', onWindowResize);
+
+    // Desativa o menu de contexto no clique direito
+    document.addEventListener('contextmenu', e => e.preventDefault());
 
     document.getElementById('btn-inventory').addEventListener('click', (e) => {
         e.stopPropagation();
@@ -171,7 +177,7 @@ function init() {
     loadOrGenerateWorld();
 }
 
-// Gestão de Blocos e Chaves do Mundo
+// Chaves e Blocos
 function getBlockKey(x, y, z) {
     return `${Math.round(x)},${Math.round(y)},${Math.round(z)}`;
 }
@@ -211,7 +217,7 @@ function saveWorld() {
         });
         localStorage.setItem('minecraft_saved_world', JSON.stringify(worldData));
     } catch (e) {
-        console.warn('Erro ao guardar o mundo no LocalStorage:', e);
+        console.warn('Erro ao guardar o mundo:', e);
     }
 }
 
@@ -226,7 +232,6 @@ function loadOrGenerateWorld() {
             });
             controls.getObject().position.set(0, 10, 0);
         } catch (e) {
-            console.error('Erro ao carregar dados salvos. A gerar novo mundo...');
             generateDefaultWorld();
         }
     } else {
@@ -260,7 +265,7 @@ function generateDefaultWorld() {
     controls.getObject().position.set(0, 5, 0);
 }
 
-// Interface Hotbar e Inventário
+// Interface
 function buildUIHotbar() {
     const hotbarEl = document.getElementById('hotbar');
     const targetEl = document.getElementById('inventory-hotbar-target');
@@ -346,7 +351,7 @@ function loadSavedHotbar() {
             const ids = JSON.parse(saved);
             hotbarSlots = ids.map(id => Object.values(BLOCK_TYPES).find(b => b.id === id) || BLOCK_TYPES.GRASS);
         } catch (e) {
-            console.error('Erro ao carregar hotbar salva.');
+            console.error('Erro ao carregar hotbar.');
         }
     }
 }
@@ -364,12 +369,10 @@ function toggleInventory(forceState) {
     }
 }
 
-// Eventos de Teclado e Rato corrigidos
+// Eventos de Teclado
 function onKeyDown(event) {
     if (isInventoryOpen) {
-        if (event.code === 'KeyE' || event.code === 'Escape') {
-            toggleInventory(false);
-        }
+        if (event.code === 'KeyE' || event.code === 'Escape') toggleInventory(false);
         return;
     }
 
@@ -378,15 +381,29 @@ function onKeyDown(event) {
         case 'KeyS': case 'ArrowDown': moveBackward = true; break;
         case 'KeyA': case 'ArrowLeft': moveLeft = true; break;
         case 'KeyD': case 'ArrowRight': moveRight = true; break;
-        case 'Space': 
-            if (canJump) {
-                velocity.y += 12;
-                canJump = false;
-            } 
+        case 'ShiftLeft': case 'ShiftRight': case 'KeyC': moveDown = true; break;
+
+        case 'Space':
+            const now = performance.now();
+            // Deteta o Pulo Duplo em menos de 300ms
+            if (now - lastSpacePressTime < 300) {
+                isFlying = !isFlying; // Alterna entre Voar e Andar
+                velocity.y = 0;
+            } else {
+                if (isFlying) {
+                    moveUp = true;
+                } else if (canJump) {
+                    velocity.y = 10;
+                    canJump = false;
+                }
+            }
+            lastSpacePressTime = now;
             break;
-        case 'KeyE': 
-            toggleInventory(true); 
+
+        case 'KeyE':
+            toggleInventory(true);
             break;
+
         default:
             if (event.code.startsWith('Digit')) {
                 const num = parseInt(event.code.replace('Digit', ''));
@@ -402,6 +419,8 @@ function onKeyUp(event) {
         case 'KeyS': case 'ArrowDown': moveBackward = false; break;
         case 'KeyA': case 'ArrowLeft': moveLeft = false; break;
         case 'KeyD': case 'ArrowRight': moveRight = false; break;
+        case 'ShiftLeft': case 'ShiftRight': case 'KeyC': moveDown = false; break;
+        case 'Space': moveUp = false; break;
     }
 }
 
@@ -464,8 +483,9 @@ function onWindowResize() {
     renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-// Colisões corrigidas para evitar ficar preso nas paredes
 function checkCollision(position) {
+    if (isFlying) return false; // Desativa colisões para voar suavemente
+
     const minX = Math.floor(position.x - PLAYER_RADIUS);
     const maxX = Math.floor(position.x + PLAYER_RADIUS);
     const minY = Math.floor(position.y - PLAYER_HEIGHT);
@@ -485,7 +505,7 @@ function checkCollision(position) {
     return false;
 }
 
-// Loop de Animação e Física
+// Loop de Física e Animação
 function animate() {
     requestAnimationFrame(animate);
 
@@ -494,42 +514,65 @@ function animate() {
     prevTime = time;
 
     if (controls.isLocked) {
-        velocity.y -= 30.0 * delta;
-
-        velocity.x -= velocity.x * 10.0 * delta;
-        velocity.z -= velocity.z * 10.0 * delta;
-
-        direction.z = Number(moveForward) - Number(moveBackward);
-        direction.x = Number(moveRight) - Number(moveLeft);
-        direction.normalize();
-
-        const speed = 20.0;
-        if (moveForward || moveBackward) velocity.z -= direction.z * speed * delta;
-        if (moveLeft || moveRight) velocity.x -= direction.x * speed * delta;
-
         const playerObj = controls.getObject();
 
-        playerObj.position.x -= velocity.x * delta;
-        if (checkCollision(playerObj.position)) {
-            playerObj.position.x += velocity.x * delta;
-            velocity.x = 0;
-        }
+        if (isFlying) {
+            // MODO VOO
+            velocity.x -= velocity.x * 10.0 * delta;
+            velocity.z -= velocity.z * 10.0 * delta;
+            velocity.y -= velocity.y * 10.0 * delta;
 
-        playerObj.position.z -= velocity.z * delta;
-        if (checkCollision(playerObj.position)) {
-            playerObj.position.z += velocity.z * delta;
-            velocity.z = 0;
-        }
+            direction.z = Number(moveForward) - Number(moveBackward);
+            direction.x = Number(moveRight) - Number(moveLeft);
+            direction.y = Number(moveUp) - Number(moveDown);
+            direction.normalize();
 
-        playerObj.position.y += velocity.y * delta;
-        if (checkCollision(playerObj.position)) {
-            if (velocity.y < 0) {
-                canJump = true;
+            const flySpeed = 30.0;
+            if (moveForward || moveBackward) velocity.z -= direction.z * flySpeed * delta;
+            if (moveLeft || moveRight) velocity.x -= direction.x * flySpeed * delta;
+            if (moveUp || moveDown) velocity.y += direction.y * flySpeed * delta;
+
+            playerObj.position.x -= velocity.x * delta;
+            playerObj.position.z -= velocity.z * delta;
+            playerObj.position.y += velocity.y * delta;
+        } else {
+            // MODO ANDAR / GRAVIDADE NORMAL
+            velocity.y -= 28.0 * delta;
+
+            velocity.x -= velocity.x * 10.0 * delta;
+            velocity.z -= velocity.z * 10.0 * delta;
+
+            direction.z = Number(moveForward) - Number(moveBackward);
+            direction.x = Number(moveRight) - Number(moveLeft);
+            direction.normalize();
+
+            const walkSpeed = 18.0;
+            if (moveForward || moveBackward) velocity.z -= direction.z * walkSpeed * delta;
+            if (moveLeft || moveRight) velocity.x -= direction.x * walkSpeed * delta;
+
+            playerObj.position.x -= velocity.x * delta;
+            if (checkCollision(playerObj.position)) {
+                playerObj.position.x += velocity.x * delta;
+                velocity.x = 0;
             }
-            playerObj.position.y -= velocity.y * delta;
-            velocity.y = 0;
+
+            playerObj.position.z -= velocity.z * delta;
+            if (checkCollision(playerObj.position)) {
+                playerObj.position.z += velocity.z * delta;
+                velocity.z = 0;
+            }
+
+            playerObj.position.y += velocity.y * delta;
+            if (checkCollision(playerObj.position)) {
+                if (velocity.y < 0) {
+                    canJump = true;
+                }
+                playerObj.position.y -= velocity.y * delta;
+                velocity.y = 0;
+            }
         }
 
+        // Limite inferior do mundo
         if (playerObj.position.y < -30) {
             velocity.y = 0;
             playerObj.position.set(0, 15, 0);
