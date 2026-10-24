@@ -54,25 +54,30 @@ let hotbarSlots = [
     BLOCK_TYPES.GLASS
 ];
 
-// Física, Movimento e Voo
+// Controles e Movimento
 let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
 let moveUp = false, moveDown = false;
 let isFlying = false;
 let canJump = false;
-let lastSpacePressTime = 0; // Para detectar o clique duplo do Espaço
+let lastSpacePressTime = 0;
 
+// Parâmetros de física ajustados para movimento fluido
 const velocity = new THREE.Vector3();
-const direction = new THREE.Vector3();
 let prevTime = performance.now();
 
-const PLAYER_HEIGHT = 1.6;
-const PLAYER_RADIUS = 0.3;
+const PLAYER_HEIGHT = 1.62;
+const PLAYER_RADIUS = 0.28;
+const WALK_SPEED = 24.0;
+const FLY_SPEED = 32.0;
+const FRICTION = 12.0;
+const GRAVITY = 28.0;
+const JUMP_FORCE = 9.5;
 
 init();
 animate();
 
 function init() {
-    // 1. Cena e Câmara
+    // 1. Cena e Câmera
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87ceeb);
     scene.fog = new THREE.FogExp2(0x87ceeb, 0.012);
@@ -84,7 +89,7 @@ function init() {
     renderer.setPixelRatio(window.devicePixelRatio);
     document.body.appendChild(renderer.domElement);
 
-    // 2. Luzes
+    // 2. Iluminação
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
     scene.add(ambientLight);
 
@@ -92,7 +97,7 @@ function init() {
     dirLight.position.set(50, 100, 50);
     scene.add(dirLight);
 
-    // 3. Materiais dos Blocos
+    // 3. Materiais
     Object.values(BLOCK_TYPES).forEach(b => {
         if (b.topColor) {
             const topTex = createBlockTexture(b.topColor);
@@ -121,14 +126,12 @@ function init() {
         }
     });
 
-    // 4. Controlos de Rato
+    // 4. PointerLock Controls
     controls = new THREE.PointerLockControls(camera, document.body);
 
     const instructions = document.getElementById('instructions');
     instructions.addEventListener('click', () => {
-        if (!isInventoryOpen) {
-            controls.lock();
-        }
+        if (!isInventoryOpen) controls.lock();
     });
 
     controls.addEventListener('lock', () => {
@@ -136,21 +139,17 @@ function init() {
     });
 
     controls.addEventListener('unlock', () => {
-        if (!isInventoryOpen) {
-            instructions.style.display = 'flex';
-        }
+        if (!isInventoryOpen) instructions.style.display = 'flex';
     });
 
     scene.add(controls.getObject());
 
-    // 5. Eventos de Entrada
+    // 5. Eventos
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('keyup', onKeyUp);
     document.addEventListener('mousedown', onMouseDown);
     document.addEventListener('wheel', onWheel, { passive: true });
     window.addEventListener('resize', onWindowResize);
-
-    // Desativa o menu de contexto no clique direito
     document.addEventListener('contextmenu', e => e.preventDefault());
 
     document.getElementById('btn-inventory').addEventListener('click', (e) => {
@@ -177,7 +176,6 @@ function init() {
     loadOrGenerateWorld();
 }
 
-// Chaves e Blocos
 function getBlockKey(x, y, z) {
     return `${Math.round(x)},${Math.round(y)},${Math.round(z)}`;
 }
@@ -217,7 +215,7 @@ function saveWorld() {
         });
         localStorage.setItem('minecraft_saved_world', JSON.stringify(worldData));
     } catch (e) {
-        console.warn('Erro ao guardar o mundo:', e);
+        console.warn('Erro ao salvar mundo:', e);
     }
 }
 
@@ -340,7 +338,7 @@ function saveHotbar() {
         const data = hotbarSlots.map(b => b.id);
         localStorage.setItem('minecraft_saved_hotbar', JSON.stringify(data));
     } catch (e) {
-        console.warn('Erro ao guardar hotbar:', e);
+        console.warn('Erro ao salvar hotbar:', e);
     }
 }
 
@@ -369,7 +367,7 @@ function toggleInventory(forceState) {
     }
 }
 
-// Eventos de Teclado
+// Teclado
 function onKeyDown(event) {
     if (isInventoryOpen) {
         if (event.code === 'KeyE' || event.code === 'Escape') toggleInventory(false);
@@ -385,15 +383,14 @@ function onKeyDown(event) {
 
         case 'Space':
             const now = performance.now();
-            // Deteta o Pulo Duplo em menos de 300ms
-            if (now - lastSpacePressTime < 300) {
-                isFlying = !isFlying; // Alterna entre Voar e Andar
+            if (now - lastSpacePressTime < 320) {
+                isFlying = !isFlying;
                 velocity.y = 0;
             } else {
                 if (isFlying) {
                     moveUp = true;
                 } else if (canJump) {
-                    velocity.y = 10;
+                    velocity.y = JUMP_FORCE;
                     canJump = false;
                 }
             }
@@ -483,13 +480,14 @@ function onWindowResize() {
     renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
+// Colisão precisa caixa a caixa
 function checkCollision(position) {
-    if (isFlying) return false; // Desativa colisões para voar suavemente
+    if (isFlying) return false;
 
     const minX = Math.floor(position.x - PLAYER_RADIUS);
     const maxX = Math.floor(position.x + PLAYER_RADIUS);
     const minY = Math.floor(position.y - PLAYER_HEIGHT);
-    const maxY = Math.floor(position.y - 0.1);
+    const maxY = Math.floor(position.y - 0.05);
     const minZ = Math.floor(position.z - PLAYER_RADIUS);
     const maxZ = Math.floor(position.z + PLAYER_RADIUS);
 
@@ -505,7 +503,7 @@ function checkCollision(position) {
     return false;
 }
 
-// Loop de Física e Animação
+// Loop Principal de Física e Renderização
 function animate() {
     requestAnimationFrame(animate);
 
@@ -516,52 +514,60 @@ function animate() {
     if (controls.isLocked) {
         const playerObj = controls.getObject();
 
+        // Atrito / Desaceleração
+        velocity.x -= velocity.x * FRICTION * delta;
+        velocity.z -= velocity.z * FRICTION * delta;
+
+        // Vetores de direção da câmera
+        const forward = new THREE.Vector3();
+        camera.getWorldDirection(forward);
+        if (!isFlying) forward.y = 0;
+        forward.normalize();
+
+        const side = new THREE.Vector3();
+        side.crossVectors(camera.up, forward).normalize();
+
+        const moveDir = new THREE.Vector3();
+        if (moveForward) moveDir.add(forward);
+        if (moveBackward) moveDir.sub(forward);
+        if (moveLeft) moveDir.add(side);
+        if (moveRight) moveDir.sub(side);
+        moveDir.normalize();
+
+        const currentSpeed = isFlying ? FLY_SPEED : WALK_SPEED;
+
+        if (moveForward || moveBackward || moveLeft || moveRight) {
+            velocity.x += moveDir.x * currentSpeed * delta;
+            velocity.z += moveDir.z * currentSpeed * delta;
+        }
+
         if (isFlying) {
-            // MODO VOO
-            velocity.x -= velocity.x * 10.0 * delta;
-            velocity.z -= velocity.z * 10.0 * delta;
-            velocity.y -= velocity.y * 10.0 * delta;
+            velocity.y -= velocity.y * FRICTION * delta;
+            if (moveUp) velocity.y += FLY_SPEED * delta;
+            if (moveDown) velocity.y -= FLY_SPEED * delta;
 
-            direction.z = Number(moveForward) - Number(moveBackward);
-            direction.x = Number(moveRight) - Number(moveLeft);
-            direction.y = Number(moveUp) - Number(moveDown);
-            direction.normalize();
-
-            const flySpeed = 30.0;
-            if (moveForward || moveBackward) velocity.z -= direction.z * flySpeed * delta;
-            if (moveLeft || moveRight) velocity.x -= direction.x * flySpeed * delta;
-            if (moveUp || moveDown) velocity.y += direction.y * flySpeed * delta;
-
-            playerObj.position.x -= velocity.x * delta;
-            playerObj.position.z -= velocity.z * delta;
+            playerObj.position.x += velocity.x * delta;
+            playerObj.position.z += velocity.z * delta;
             playerObj.position.y += velocity.y * delta;
         } else {
-            // MODO ANDAR / GRAVIDADE NORMAL
-            velocity.y -= 28.0 * delta;
+            // Gravidade
+            velocity.y -= GRAVITY * delta;
 
-            velocity.x -= velocity.x * 10.0 * delta;
-            velocity.z -= velocity.z * 10.0 * delta;
-
-            direction.z = Number(moveForward) - Number(moveBackward);
-            direction.x = Number(moveRight) - Number(moveLeft);
-            direction.normalize();
-
-            const walkSpeed = 18.0;
-            if (moveForward || moveBackward) velocity.z -= direction.z * walkSpeed * delta;
-            if (moveLeft || moveRight) velocity.x -= direction.x * walkSpeed * delta;
-
-            playerObj.position.x -= velocity.x * delta;
+            // Movimento X separado
+            playerObj.position.x += velocity.x * delta;
             if (checkCollision(playerObj.position)) {
-                playerObj.position.x += velocity.x * delta;
+                playerObj.position.x -= velocity.x * delta;
                 velocity.x = 0;
             }
 
-            playerObj.position.z -= velocity.z * delta;
+            // Movimento Z separado
+            playerObj.position.z += velocity.z * delta;
             if (checkCollision(playerObj.position)) {
-                playerObj.position.z += velocity.z * delta;
+                playerObj.position.z -= velocity.z * delta;
                 velocity.z = 0;
             }
 
+            // Movimento Y separado (Pulo / Queda)
             playerObj.position.y += velocity.y * delta;
             if (checkCollision(playerObj.position)) {
                 if (velocity.y < 0) {
@@ -572,10 +578,10 @@ function animate() {
             }
         }
 
-        // Limite inferior do mundo
+        // Se cair fora do mapa, volta para a superfície
         if (playerObj.position.y < -30) {
-            velocity.y = 0;
-            playerObj.position.set(0, 15, 0);
+            velocity.set(0, 0, 0);
+            playerObj.position.set(0, 10, 0);
         }
     }
 
