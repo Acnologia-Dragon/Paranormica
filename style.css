@@ -1,1 +1,267 @@
+* {
+    box-sizing: border-box;
+    user-select: none;
+    -webkit-user-select: none;
+}
 
+body, html {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #000;
+}
+
+/* Miradouro central */
+#crosshair {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 28px;
+    font-weight: bold;
+    pointer-events: none;
+    z-index: 10;
+    text-shadow: 0 0 3px #000;
+}
+
+/* Painel Superior */
+#ui-top {
+    position: absolute;
+    top: 15px;
+    left: 15px;
+    z-index: 12;
+    display: flex;
+    gap: 10px;
+}
+
+#ui-top button {
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    border: 2px solid #555;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+#ui-top button:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: #fff;
+}
+
+/* Tela inicial de clique */
+#instructions {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.75);
+    color: white;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 20;
+    cursor: pointer;
+}
+
+#instructions h1 {
+    font-size: 48px;
+    margin-bottom: 10px;
+    text-shadow: 2px 2px 4px #000;
+}
+
+.controls-guide {
+    background: rgba(0, 0, 0, 0.5);
+    padding: 20px 30px;
+    border-radius: 10px;
+    border: 1px solid #444;
+    margin-top: 20px;
+    text-align: left;
+    line-height: 1.6;
+}
+
+/* Hotbar inferior de 9 slots */
+#hotbar-container {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 12;
+}
+
+#hotbar {
+    display: flex;
+    background: rgba(0, 0, 0, 0.6);
+    padding: 6px;
+    border-radius: 8px;
+    border: 2px solid #555;
+    gap: 6px;
+}
+
+.slot {
+    width: 50px;
+    height: 50px;
+    border: 2px solid #444;
+    border-radius: 6px;
+    background-color: rgba(255, 255, 255, 0.1);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    cursor: pointer;
+    transition: transform 0.1s, border-color 0.1s;
+}
+
+.slot.active {
+    border-color: #fff;
+    background-color: rgba(255, 255, 255, 0.25);
+    transform: scale(1.1);
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+}
+
+.slot-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 4px;
+    box-shadow: inset 0 0 4px rgba(0,0,0,0.5);
+}
+
+.slot-number {
+    position: absolute;
+    top: 2px;
+    left: 4px;
+    font-size: 10px;
+    color: #ccc;
+    font-weight: bold;
+}
+
+.slot-name {
+    font-size: 9px;
+    color: #fff;
+    margin-top: 2px;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 46px;
+}
+
+/* Modal do Inventário (E) */
+#inventory-modal {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    z-index: 30;
+    display: none;
+    justify-content: center;
+    align-items: center;
+}
+
+#inventory-content {
+    background: #222;
+    border: 2px solid #666;
+    border-radius: 12px;
+    padding: 25px;
+    width: 550px;
+    max-width: 90%;
+    color: #fff;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+}
+
+#inventory-content h2 {
+    margin-top: 0;
+    border-bottom: 1px solid #444;
+    padding-bottom: 10px;
+}
+
+.inventory-section-title {
+    font-size: 14px;
+    font-weight: bold;
+    color: #4caf50;
+    margin: 15px 0 8px 0;
+    text-transform: uppercase;
+}
+
+#block-catalog {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+    gap: 10px;
+    background: #111;
+    padding: 12px;
+    border-radius: 8px;
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #333;
+}
+
+.catalog-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px;
+    background: #2a2a2a;
+    border: 2px solid #444;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.catalog-item:hover {
+    border-color: #888;
+    background: #3a3a3a;
+}
+
+.catalog-item.selected-for-equip {
+    border-color: #4caf50;
+    background: #1b3e1c;
+    box-shadow: 0 0 8px #4caf50;
+}
+
+.catalog-item .item-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 4px;
+}
+
+.catalog-item .item-label {
+    font-size: 10px;
+    margin-top: 4px;
+    text-align: center;
+}
+
+#inventory-hotbar-target {
+    display: flex;
+    gap: 8px;
+    background: #111;
+    padding: 10px;
+    border-radius: 8px;
+    justify-content: center;
+    border: 1px solid #333;
+}
+
+#btn-close-inv {
+    margin-top: 20px;
+    width: 100%;
+    padding: 10px;
+    background: #4caf50;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-weight: bold;
+    cursor: pointer;
+    font-size: 15px;
+}
+
+#btn-close-inv:hover {
+    background: #45a049;
+}
